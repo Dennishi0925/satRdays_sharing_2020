@@ -3,6 +3,12 @@
 My sharing material on satRdays Taiwan 2020.   
 You can find detailed information of the event on its [official website](https://taiwan2020.satrdays.org/).
 
+### Material
+> * Some Research Paper
+> * Textbook and courses
+> * Code
+> * Slide
+
 ### Topic
 Tidy Network Analysis: Legislative cosponsorship networks in Taiwan 
 
