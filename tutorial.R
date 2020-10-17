@@ -85,6 +85,7 @@ network_bill_09 %>%
   filter(pro_party_s_e == "KMT")
 
 df_bill_pro_cos_09 %>%
+  filter(n > 0) %>%
   filter(pro_party_s_e == "KMT")
 
 df_bill_pro_cos_09 %>% filter(n > 0) %>%
