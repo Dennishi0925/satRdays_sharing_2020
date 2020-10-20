@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Tidy Network Analysis</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="曾子軒 Dennis Tseng" />
+    <link href="libs/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="libs/remark-css-0.0.1/metropolis.css" rel="stylesheet" />
+    <link href="libs/remark-css-0.0.1/metropolis-fonts.css" rel="stylesheet" />
+    <script src="libs/kePrint-0.0.1/kePrint.js"></script>
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Tidy Network Analysis
+## Legislative cosponsorship networks in Taiwan
+### 曾子軒 Dennis Tseng
+### 台大新聞所 NTU Journalism
+### 2020/10/17
+
+---
+
+&lt;style type="text/css"&gt;
+
+.remark-slide-content {
+    padding: 1em 1em 1em 1em;
+    font-size: 28px;
+}
+
+.my-one-page-font {
+  padding: 1em 1em 1em 1em;
+  font-size: 20px;
+  /*xaringan::inf_mr()*/
+}
+
+&lt;/style&gt;
+
+
+
+# 自我介紹
+
+&lt;ul&gt;
+&lt;li&gt;個人背景
+    &lt;ul&gt;
+    &lt;li&gt;商學院畢業/新聞所就讀中&lt;/li&gt;
+    &lt;li&gt;數據分析實習&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;li&gt;Interest
+    &lt;ul&gt;
+    &lt;li&gt;資料分析領域&lt;/li&gt;
+    &lt;li&gt;資料新聞領域&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;li&gt;R
+    &lt;ul&gt;
+    &lt;li&gt;套件: tidyverse 相關,如 dplyr, tidyr, purrr, ggplot2&lt;/li&gt;
+    &lt;li&gt;data cleaning, data manipulation, data visualization; &lt;br&gt;social network analysis; data mining; text mining&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;li&gt;更多
+    &lt;ul&gt;
+    &lt;li&gt;&lt;a href="https://medium.com/dd-story-hub" target="_blank"&gt;跟朋友一起開的 Medium&lt;/a&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;a href="https://dennisrdatanews.netlify.com/"&gt;我的部落格&lt;/a&gt;&lt;/li&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+
+# Agenda
+
+&lt;ul&gt;
+&lt;li&gt;大綱
+    &lt;ul&gt;
+    &lt;li&gt;網絡分析的基本概念&lt;/li&gt;
+    &lt;li&gt;套件介紹: &lt;code&gt;tidygraph&lt;/code&gt; 以及 &lt;code&gt;ggraph&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;以台灣立法委員提案與連署網絡資料為例&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ul&gt;
+&lt;li&gt;預期
+    &lt;ul&gt;
+    &lt;li&gt;適合對 R 語言有基礎且不排斥 tidyverse 的人&lt;/li&gt;
+    &lt;li&gt;適合對 network analysis 有了解想在 R 裡面將結果視覺化的人&lt;/li&gt;
+    &lt;li&gt;適合用過 igraph 但對它不夠滿意的人&lt;/li&gt;
+    &lt;li&gt;不適合想產出設計師等級超精美圖表的人&lt;/li&gt;
+    &lt;li&gt;不適合想聽學術政治分析的人&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+class: my-one-page-font
+
+# 什麼時候會用到網絡分析 - 長方形資料01
+
+&lt;img src="image/tabular_data.jpg" width="90%" height="90%" /&gt;
+
+--
+
+
+```r
+library(tidyverse)
+# 按照被連署次數多到少排序
+df_aggregate %&gt;% arrange(desc(n))
+# 找名字包含"平"者
+df_aggregate %&gt;% filter(str_detect(pro, "平"))
+# 找各黨派被連署次數最多
+df_aggregate %&gt;% group_by(party) %&gt;% summarise(n = max(n))
+```
+---
+
+class: my-one-page-font
+
+# 什麼時候會用到網絡分析 - 長方形資料02
+
+&lt;img src="image/tabular_data2.jpg" width="90%" height="90%" /&gt;
+
+--
+
+
+```r
+library(tidyverse)
+# 找出最挺每位提案委員的連署人是誰
+df_raw %&gt;% group_by(pro) %&gt;% arrange(desc(n)) %&gt;% 
+  filter(row_number() == 1)
+# 看各黨連署的黨派組成
+df_raw %&gt;% group_by(pro_party, cos_party) %&gt;% summarise(n = sum(n)) %&gt;%
+  arrange(pro_party, desc(cos_party))
+```
+
+---
+# "時機若對，我第一個使用網絡分析"
+
+&lt;ul&gt;
+&lt;li&gt;很好解決的問題
+    &lt;ul&gt;
+    &lt;li&gt;誰提案最多？誰提案最少？&lt;/li&gt;
+    &lt;li&gt;最常幫國民黨立委連署的民進黨立委是誰？&lt;/li&gt;
+    &lt;li&gt;親民黨幫民進黨立委連署佔比有多高？&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;br&gt;    
+--
+&lt;li&gt;不太好解決的問題
+    &lt;ul&gt;
+    &lt;li&gt;誰最重要？誰跟大家關係最好？&lt;/li&gt;
+    &lt;li&gt;以丁守中為例，誰跟他距離最遠？&lt;/li&gt;
+    &lt;li&gt;兩大黨哪個在連署上比較緊密？&lt;/li&gt;
+    &lt;li&gt;連署上有沒有派系？有沒有一群人很邊緣？&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/ul&gt;
+
+---
+# 網絡分析概念 - 關心重點與問題對應
+
+&lt;ul&gt;
+&lt;li&gt;關心重點
+    &lt;ul&gt;
+    &lt;li&gt;關心個體之間的關係，以及這些關係組成的結構&lt;/li&gt;
+    &lt;li&gt;舉例：前立委&lt;b&gt;徐永明&lt;/b&gt;提案次數重要、誰幫他連署也重要&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+--
+&lt;ul&gt;
+&lt;li&gt;問題對應
+    &lt;ul&gt;
+    &lt;li&gt;重要 / centrality: 誰最重要？誰跟大家關係最好？&lt;/li&gt;
+    &lt;li&gt;距離 / distance  : 以丁守中為例，誰跟他距離最遠？&lt;/li&gt;
+    &lt;li&gt;緊密 / betweeness: 兩大黨哪個在連署上比較緊密？&lt;/li&gt;
+    &lt;li&gt;分群 / community : 連署有沒有派系？有沒有人很邊緣？&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+# 網絡分析概念 - 基本組成與特徵
+
+&lt;ul&gt;
+&lt;li&gt;基本組成
+    &lt;ul&gt;
+    &lt;li&gt;個體 - nodes/vertices/actors&lt;/li&gt;
+    例如立法委員、學術論文、PTT網軍
+    &lt;li&gt;關係 - edges/links/bonds&lt;/li&gt;
+    例如連署關係、引用關係、推噓文
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+--
+&lt;ul&gt;
+&lt;li&gt;個體與關係都有特徵
+    &lt;ul&gt;
+    &lt;li&gt;個體有性質，例如黨派、性別&lt;/li&gt;
+    &lt;li&gt;關係有方向與強度，方向如引用與被引用、強度如引用次數&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+# 範例 - 黃國昌提案的連署網絡
+
+&lt;img src="image/cosponsorship_huang.jpg" width="75%" height="75%" style="display: block; margin: auto;" /&gt;
+
+.center[2020 第九屆立委黃國昌提案的連署情形 by 我自己]
+
+---
+# 網絡分析概念 - 網絡資料長相
+
+&lt;img src="image/network_data_node.jpg" width="40%" height="40%" /&gt;&lt;img src="image/network_data_edge.jpg" width="40%" height="40%" /&gt;
+
+.pull-left[nodes]
+
+.pull-right[edges]
+
+---
+# 什麼時候會用到網絡分析 - 分析對象
+
+&lt;ul&gt;
+&lt;li&gt;大群體中的個體
+    &lt;ul&gt;
+    &lt;li&gt;立法委員裡面的提案狂魔&lt;/li&gt;
+    &lt;li&gt;學術領域裡面的重要論文&lt;/li&gt;
+    &lt;li&gt;朋友當中的認識王&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;br&gt;    
+--
+&lt;li&gt;大群體中的次群體
+    &lt;ul&gt;
+    &lt;li&gt;屬於政黨內的派系&lt;/li&gt;
+    &lt;li&gt;高中生會同時申請的科系&lt;/li&gt;
+    &lt;li&gt;PTT 推文網軍集團&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/ul&gt;
+---
+# 實例 - 人際網絡與政治獻金
+
+&lt;img src="image/nyt_hapiness_example.jpg" width="50%" height="50%" /&gt;&lt;img src="image/mirrormedia_money_example.jpg" width="50%" height="50%" /&gt;
+
+.pull-left[2008 「快樂會傳染、請你慷慨」研究 &lt;br&gt;  by [紐約時報](https://archive.nytimes.com/www.nytimes.com/imagepages/2008/12/05/health/05happyA.ready.html?action=click&amp;module=RelatedCoverage&amp;pgtype=Article&amp;region=Footer)]
+
+.pull-right[2016 台灣立委與總統選舉(合法)政治獻金收受網絡 - 以柯建銘為例 &lt;br&gt;  by [鏡週刊](https://www.mirrormedia.mg/projects/political-contribution/#/explore)]
+
+---
+# 實例 - PTT 與立委連署
+
+&lt;img src="image/stevenptt_example.jpg" width="50%" height="50%" /&gt;&lt;img src="image/cosponsorship_example.jpg" width="50%" height="50%" /&gt;
+
+.pull-left[2019 PTT 八掛版 &lt;br&gt; 共同推文關係網絡(節選) &lt;br&gt;  by [Steven Yeo](https://www.syviz.me/post/%E5%93%88%E5%9B%89-%E4%BD%A0%E6%98%AF%E7%B6%B2%E8%BB%8D%E5%97%8E-ptt%E6%8E%A8%E6%96%87%E9%97%9C%E4%BF%82%E8%A6%96%E8%A6%BA%E5%8C%96/)]
+
+.pull-right[2020 第八屆立法委員國民兩黨互相連署情形(節選) &lt;br&gt; by 我自己]
+
+---
+class: my-one-page-font
+
+# 從 tabular 到 network - 提案連署資料
+
+
+```r
+df_index %&gt;% slice(10) %&gt;% select(1,3,7,8,9,13) %&gt;%
+  kableExtra::kable("html") %&gt;%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+&lt;table class="table table-striped table-hover" style="margin-left: auto; margin-right: auto;"&gt;
+ &lt;thead&gt;
+  &lt;tr&gt;
+   &lt;th style="text-align:left;"&gt; term &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; sessionTimes &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; billOrg &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; billProposer &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; billCosignatory &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; selectTerm &lt;/th&gt;
+  &lt;/tr&gt;
+ &lt;/thead&gt;
+&lt;tbody&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; 08 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 02 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 本院委員李應元等24人 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 李應元　　林世嘉　　陳歐珀 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 蔡煌瑯　　蕭美琴　　李昆澤　　魏明谷　　林岱樺　　陳唐山　　陳節如　　田秋堇　　陳其邁　　段宜康　　蘇震清　　林佳龍　　管碧玲　　許智傑　　尤美女　　蔡其昌　　薛　凌　　陳明文　　吳宜臻　　鄭麗君　　邱志偉 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; all &lt;/td&gt;
+  &lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+
+---
+class: my-one-page-font
+
+# 從 tabular 到 network - 立委資料
+
+
+```r
+df_legislator %&gt;% head(5) %&gt;% select(1,2,3,4,5,6,7) %&gt;%
+  kableExtra::kable("html") %&gt;%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+&lt;table class="table table-striped table-hover" style="margin-left: auto; margin-right: auto;"&gt;
+ &lt;thead&gt;
+  &lt;tr&gt;
+   &lt;th style="text-align:left;"&gt; term &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; name &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; ename &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; sex &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; party &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; partyGroup &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; areaName &lt;/th&gt;
+  &lt;/tr&gt;
+ &lt;/thead&gt;
+&lt;tbody&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; 10 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 王定宇 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; Wang Ting-Yu &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 民主進步黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 民主進步黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 臺南市第6選舉區 &lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; 10 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 孔文吉 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; Kung Wen-Chi &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 中國國民黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 中國國民黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 山地原住民選舉區 &lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; 10 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 王美惠 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; WangMei-Hui &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 女 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 民主進步黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 民主進步黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 嘉義市選舉區 &lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; 10 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 王婉諭 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; WangWan-Yu &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 女 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 時代力量 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 時代力量 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 全國不分區及僑居國外國民 &lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:left;"&gt; 10 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 伍麗華Saidhai‧Tahovecahe &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; WuLi-Hua &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 女 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 民主進步黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 民主進步黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 山地原住民選舉區 &lt;/td&gt;
+  &lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+
+---
+class: my-one-page-font
+
+# 從 tabular 到 network - 清理後的資料
+
+
+```r
+df_cosponsor_09 %&gt;% slice(101:105) %&gt;% select(3,1,5,6,2,12,13,4) %&gt;%
+  kableExtra::kable("html") %&gt;%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+&lt;table class="table table-striped table-hover" style="margin-left: auto; margin-right: auto;"&gt;
+ &lt;thead&gt;
+  &lt;tr&gt;
+   &lt;th style="text-align:right;"&gt; term &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; pro &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; pro_sex &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; pro_party &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; cos &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; cos_sex &lt;/th&gt;
+   &lt;th style="text-align:left;"&gt; cos_party &lt;/th&gt;
+   &lt;th style="text-align:right;"&gt; n &lt;/th&gt;
+  &lt;/tr&gt;
+ &lt;/thead&gt;
+&lt;tbody&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:right;"&gt; 9 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 王金平 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 中國國民黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 賴士葆 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 中國國民黨 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 4 &lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:right;"&gt; 9 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 王金平 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 中國國民黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 賴瑞隆 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 民主進步黨 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 0 &lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:right;"&gt; 9 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 王金平 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 中國國民黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 鍾孔炤 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 民主進步黨 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 1 &lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:right;"&gt; 9 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 王金平 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 中國國民黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 鍾佳濱 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 民主進步黨 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 1 &lt;/td&gt;
+  &lt;/tr&gt;
+  &lt;tr&gt;
+   &lt;td style="text-align:right;"&gt; 9 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 王金平 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 中國國民黨 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 簡東明Uliw．Qaljupayare &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 男 &lt;/td&gt;
+   &lt;td style="text-align:left;"&gt; 中國國民黨 &lt;/td&gt;
+   &lt;td style="text-align:right;"&gt; 3 &lt;/td&gt;
+  &lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+
+---
+
+# 來看程式碼跟 code
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href = "https://dennishi0925.github.io/satRdays_sharing_2020_slide/sharing_slide#1"&gt;簡報連結&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href = "https://github.com/Dennishi0925/satRdays_sharing_2020"&gt;程式碼連結&lt;/a&gt;
+&lt;ul&gt;
+    &lt;li&gt;igraph 基本 - igraph.R&lt;/li&gt;
+    &lt;li&gt;用 tidygraph 分析立委資料 - tutorial.R&lt;/li&gt;
+    &lt;li&gt;data 資料夾 - 第九屆立委連署資料&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+
+# 「瀟灑走一回」 - 匯入與清理資料
+
+&lt;ul&gt;
+&lt;li&gt;Data Importing
+    &lt;ul&gt;
+    &lt;li&gt;&lt;a href = "https://data.ly.gov.tw/getds.action?id=20"&gt;立法院開放資料服務平台&lt;/a&gt;&lt;/li&gt;
+    &lt;li&gt;欄位包含屆別, 會期, 提案名稱, 提案人, 連署人等&lt;/li&gt;
+    &lt;li&gt;原始格式: json/xml/csv&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+--
+&lt;ul&gt;
+&lt;li&gt;Data Munging
+    &lt;ul&gt;
+    &lt;li&gt;目的 - 從提案的「事件資料」到以立委為單位的「關係資料」&lt;/li&gt;
+    原始: 提案 A/B, 連署C/D/E; 關係: 提案A, 連署D, 共n次
+    &lt;li&gt;流程 - 清提案資料、串立委資料、依照提案與連署匯總&lt;/li&gt;
+    &lt;li&gt;幾個重點 - 姓名、空白、原始錯誤&lt;/li&gt;
+    異體字/錯字/傳統姓名、key in 錯誤、"%C2%A0"
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+---
+
+# 套件介紹 - [tidygraph](https://github.com/thomasp85/tidygraph)
+
+&lt;ul&gt;
+&lt;li&gt;特色
+    &lt;ul&gt;
+    &lt;li&gt;"provides a tidy API for graph/network manipulation"&lt;/li&gt;
+    &lt;li&gt;"While network data itself is not tidy, it can be envisioned as two tidy tables, one for node data and one for edge data."&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;tidyverse&lt;/code&gt; 生態系底下的套件，很多互通的概念&lt;/li&gt;
+    &lt;li&gt;整理 &lt;code&gt;igraph&lt;/code&gt; 的函數，變得很有一致性&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+--
+&lt;ul&gt;
+&lt;li&gt;函數
+    &lt;ul&gt;
+    &lt;li&gt;centrality - &lt;code&gt;centrality_()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;community detection - &lt;code&gt;group_()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;node measures - &lt;code&gt;node_is_()&lt;/code&gt;, &lt;code&gt;node_rank()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;edge measures - &lt;code&gt;edge_is_()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;graph measures - &lt;code&gt;graph_is_()&lt;/code&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+
+# 套件介紹 - [ggraph](https://github.com/thomasp85/ggraph)
+&lt;ul&gt;
+&lt;li&gt;特色
+    &lt;ul&gt;
+    &lt;li&gt;"A grammar of graphics for relational data"&lt;/li&gt;
+    &lt;li&gt;"an extension of ggplot2 aimed at supporting relational data structures such as networks, graphs, and trees"&lt;/li&gt;
+    &lt;li&gt;畫網絡圖時遵循 &lt;code&gt;ggplot2&lt;/code&gt; 的繪圖文法&lt;/li&gt;
+    &lt;li&gt;有跟 &lt;code&gt;tidygraph&lt;/code&gt; 整合&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+--
+&lt;ul&gt;
+&lt;li&gt;組成
+    &lt;ul&gt;
+    &lt;li&gt;layout - 畫出網絡的架構&lt;/li&gt;
+    &lt;li&gt;nodes - &lt;code&gt;geom_node_()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;edges - &lt;code&gt;geom_edge_()&lt;/code&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+# 再回去基本定義一下
+
+&lt;ul&gt;
+&lt;li&gt;組成 - nodes and edges
+    &lt;ul&gt;
+    &lt;li&gt;edge 可以有方向性(direction)&lt;/li&gt;
+    &lt;li&gt;edge 可以有權重(weight)&lt;/li&gt;
+    &lt;li&gt;node 可以自己連自己(self-loop)&lt;/li&gt;
+    &lt;li&gt;node 之間可以不只有一個連結&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;表示方法
+    &lt;ul&gt;
+    &lt;li&gt;adjacency matrix&lt;/li&gt;
+    &lt;li&gt;adjacency list&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+---
+# 再回去基本定義兩下
+
+&lt;ul&gt;
+&lt;li&gt;neighbor and degree
+    &lt;ul&gt;
+    &lt;li&gt;size - 組成個數&lt;/li&gt;
+    &lt;li&gt;neighbor - 鄰居&lt;/li&gt;
+    &lt;li&gt;degree - 鄰居個數&lt;/li&gt;
+    &lt;li&gt;degree distribution - 鄰居個數的分佈&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;connectivity
+    &lt;ul&gt;
+    &lt;li&gt;path - 從 A 到 B 有多遠 (a sequence of edges)&lt;/li&gt;
+    &lt;li&gt;connected - graph 的任兩點都有連接&lt;/li&gt;
+    &lt;li&gt;connected component - graph 的某部分任兩點都有連結&lt;/li&gt;
+    &lt;li&gt;distance - 從 A 到 B 的最短距離&lt;/li&gt;
+    &lt;li&gt;diameter - graph 當中最長的任兩點最短距離&lt;/li&gt;
+    &lt;li&gt;cluster - global and local (看triangles)&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+# 再回去基本定義三下
+
+&lt;ul&gt;
+&lt;li&gt;其他
+    &lt;ul&gt;
+    &lt;li&gt;weak ties&lt;/li&gt;
+    &lt;li&gt;embeddedness&lt;/li&gt;
+    &lt;li&gt;structure holes&lt;/li&gt;
+    &lt;li&gt;degree distribution - 鄰居個數的分佈&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;觀察真實生活中的網絡
+    &lt;ul&gt;
+    &lt;li&gt;average path length 的長短&lt;/li&gt;
+    &lt;li&gt;connected component 的大小&lt;/li&gt;
+    &lt;li&gt;clustering coefficient 的大小/li&gt;
+    &lt;li&gt;structure 的模組化程度&lt;/li&gt;
+    &lt;li&gt;degree distribution 是否有 scale-free 特性&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+# 再回去基本定義最後一下
+
+&lt;ul&gt;
+&lt;li&gt;centrality - 判斷哪個 node 重要 (重要的定義很多樣) &lt;br&gt;
+    &lt;ul&gt;
+    &lt;li&gt;degree centrality - 直接算有多少鄰居，比數量&lt;/li&gt;
+     意義 - 直接跟他人有聯繫(朋友多)
+    &lt;li&gt;closeness centrality - 計算最短距離的平均，比距離&lt;/li&gt;
+    意義 - 用相對短距離接觸到他人(朋友的朋友多)
+    &lt;li&gt;betweenness centrality - 計算處在最短距離的次數，比關鍵度&lt;/li&gt;
+    意義 - 處於很多最短距離上(關鍵人物)
+    &lt;li&gt;eigenvector centrality - 計算鄰居的重要性分數，比分數高低&lt;/li&gt;
+    意義 - 鄰居重要程度決定自己重要程度(厲害的人成為朋友)
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;ranking
+    &lt;ul&gt;
+    &lt;li&gt;pagerank - Google 搜尋排序&lt;/li&gt;
+    &lt;li&gt;hubs and authorities - 重要論文&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+# 構築網絡資料 - tbl_graph()
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;tbl_graph()&lt;/code&gt; - 兩個 dataframe
+    &lt;ul&gt;
+    &lt;li&gt;nodes = df_nodes&lt;/li&gt;
+    &lt;li&gt;edges = df_edges&lt;/li&gt;
+    &lt;li&gt;directed, node_key&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;as_tbl_graph()&lt;/code&gt; - 一個 dataframe
+    &lt;ul&gt;
+    &lt;li&gt;x = df_nodes_edges&lt;/li&gt;
+    &lt;li&gt;weight = n&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+---
+# 操作網絡資料 - activate()
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;activate()&lt;/code&gt; - 兩個 dataframe
+    &lt;ul&gt;
+    &lt;li&gt;&lt;code&gt;activate(nodes)&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;activate(nodes)&lt;/code&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ul&gt;
+&lt;li&gt;跟&lt;code&gt;tidyverse&lt;/code&gt;的整合
+    &lt;ul&gt;
+    &lt;li&gt;&lt;code&gt;filter(), mutate(), select(), etc.&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;left_join(), inner_join()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;as_tibble()&lt;/code&gt;&lt;/li&gt;
+    
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+# 可以回答問題了！
+
+&lt;ul&gt;
+&lt;li&gt;問題對應
+    &lt;ul&gt;
+    &lt;li&gt;重要 / centrality: 誰最重要？誰跟大家關係最好？&lt;/li&gt;
+    &lt;li&gt;距離 / distance  : 以丁守中為例，誰跟他距離最遠？&lt;/li&gt;
+    &lt;li&gt;緊密 / betweeness: 兩大黨哪個在連署上比較緊密？&lt;/li&gt;
+    &lt;li&gt;分群 / community : 連署有沒有派系？有沒有人很邊緣？&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;ul&gt;
+&lt;li&gt;函數族群
+    &lt;ul&gt;
+    &lt;li&gt;&lt;code&gt;centrality&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;node_pairs&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;node_is&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;group&lt;/code&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+class: my-one-page-font
+
+# 誰重要？
+
+&lt;ul&gt;
+&lt;li&gt;不用網絡也可以
+    &lt;ul&gt;
+    &lt;li&gt;連署次數最多/最少的立委&lt;/li&gt;
+    &lt;li&gt;被連署最多/最少的立委&lt;/li&gt;
+    &lt;li&gt;被連署人數最多/最少的立委&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+
+```r
+# 用網絡方法
+network_bill_09 %&gt;% 
+  activate(edges) %&gt;% 
+  filter(weight &gt;= 50) %&gt;%
+  activate(nodes) %&gt;%
+  mutate(centrality_degree = centrality_degree(),
+         centrality_closeness = centrality_closeness(),
+         centrality_betweenness  = centrality_betweenness()) %&gt;%
+  arrange(desc(centrality_degree)) %&gt;%
+  select(name, party, centrality_degree)
+# 用tabular
+df_bill_pro_cos_09 %&gt;%
+  filter(n &gt;= 50) %&gt;%
+  group_by(pro) %&gt;% summarise(degree = n_distinct(cos)) %&gt;%
+  arrange(desc(degree))
+```
+
+---
+# 黨派內部與跨黨交流？
+
+&lt;ul&gt;
+&lt;li&gt;跨黨派互動
+    &lt;ul&gt;
+    &lt;li&gt;幫自己黨派以外連署&lt;/li&gt;
+    &lt;li&gt;泛藍/泛綠各自幫忙&lt;/li&gt;
+    &lt;li&gt;國民黨/民進黨互相幫忙&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+
+```r
+# 用網絡方法
+df_bill_pro_cos_09 %&gt;% filter(pro_party != cos_party) %&gt;%
+  filter((pro_party == "中國國民黨" &amp; cos_party == "民主進步黨") | (cos_party == "中國國民黨" &amp; pro_party == "民主進步黨")) %&gt;%
+  count(pro, pro_party, cos, cos_party, sort = T)
+```
+
+---
+# 連署集團特性
+
+&lt;ul&gt;
+&lt;li&gt;以整體來看(graph) &amp; 看政黨
+    &lt;ul&gt;
+    &lt;li&gt;現實 - 泛藍與泛綠&lt;/li&gt;
+    &lt;li&gt;電腦 - 兩大集團/li&gt;
+    &lt;li&gt;&lt;code&gt;group_()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;a href = "https://tidygraph.data-imaginist.com/reference/group_graph.html"&gt;reference&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+
+```r
+# 用網絡方法
+df_bill_pro_cos_09 %&gt;%
+  select(from = pro, to = cos, weight = n) %&gt;% 
+  as_tbl_graph(directed = F) %&gt;% 
+  activate(nodes) %&gt;%
+  mutate(group_louvain =
+           as.character(group_louvain(weights = weight)))
+```
+
+---
+# 關心關說的特定人士
+
+&lt;ul&gt;
+&lt;li&gt;跟徐永明的距離
+    &lt;ul&gt;
+    &lt;li&gt;一對節點之間的關係(node pairs relation)&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;node_distance_to()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;node_similarity_with()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;判斷特定節點性質&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;node_is_center()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;node_is_keyplayer()&lt;/code&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+
+```r
+# 用網絡方法
+df_bill_pro_cos_09 %&gt;%
+  select(from = pro, to = cos, weight = n) %&gt;% 
+  as_tbl_graph(directed = F) %&gt;% 
+  mutate(center = node_is_center(),
+         distance_Hsu_all = node_distance_to(
+  name == "徐永明", mode = "all", weights = weight))
+```
+
+---
+# 其他問題、概念、函數
+
+&lt;ul&gt;
+&lt;li&gt;Edge measures
+    &lt;ul&gt;
+    &lt;li&gt;&lt;code&gt;edge_is_multiple()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;edge_is_loop()&lt;/code&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ul&gt;
+&lt;li&gt;Graph measures
+    &lt;ul&gt;
+    &lt;li&gt;&lt;code&gt;graph_is_connected()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;graph_component_count()&lt;/code&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ul&gt;
+&lt;li&gt;Graph creation
+    &lt;ul&gt;
+    &lt;li&gt;&lt;code&gt;create_ring()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;create_bipartite()&lt;/code&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+
+# 看一下畫圖
+
+&lt;ul&gt;
+&lt;li&gt;組成
+    &lt;ul&gt;
+    &lt;li&gt;&lt;code&gt;&lt;a href = "https://ggraph.data-imaginist.com/reference/ggraph.html"&gt;ggraph(graph, layout = '')&lt;/a&gt;&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;geom_edge_()&lt;/code&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;geom_node_()&lt;/code&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ul&gt;
+&lt;li&gt;看更多
+    &lt;ul&gt;
+    &lt;li&gt;&lt;code&gt;&lt;a href = "https://github.com/schochastics/graphlayouts"&gt;library(graphlayouts)&lt;/a&gt;&lt;/code&gt; - 提供更多 layout&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;&lt;a href = "https://datastorm-open.github.io/visNetwork/"&gt;library(visNetwork)&lt;/a&gt;&lt;/code&gt; - 互動圖表選項&lt;/li&gt;
+    &lt;li&gt;&lt;code&gt;&lt;a href = "http://christophergandrud.github.io/networkD3/"&gt;library(visNetwork)&lt;/a&gt;&lt;/code&gt; - 互動圖表選項&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+---
+# 一些學術與實務角度
+
+&lt;ul&gt;
+&lt;li&gt;學術
+    &lt;ul&gt;
+    &lt;li&gt;立法表態模型 - 用連署向選民表達立場&lt;/li&gt;
+    &lt;li&gt;立法資訊模型 - 對其他委員傳遞訊號&lt;/li&gt;
+    &lt;li&gt;連署網絡模型 - 人際網絡扮演重要角色&lt;/li&gt;
+    &lt;li&gt;投票 vs. 提案 - 清楚表達政治意志 vs. 自主表達&lt;/li&gt;
+    &lt;li&gt;台灣連署維度 - a.泛藍泛綠分歧 b.小黨與其他議題&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+--
+&lt;ul&gt;
+&lt;li&gt;實務：連署/提案的意義
+    &lt;ul&gt;
+    &lt;li&gt;連署原因 - 眾多，熟識、幫忙、認同理念&lt;/li&gt;
+    &lt;li&gt;重要程度 - 主提案 &gt; 提案 &gt; 投票 &gt;&gt; 連署&lt;/li&gt;
+    &lt;li&gt;立委類型(分區/不分區、自己專業/非自己專業)&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+
+# Further Resource
+&lt;ul&gt;
+&lt;li&gt;Articles
+    &lt;ul&gt;
+    &lt;li&gt;&lt;a href = "https://shirinsplayground.netlify.com/2018/03/got_network/?utm_campaign=News&amp;utm_medium=Community&amp;utm_source=DataCamp.com"&gt;Another Game of Thrones network analysis&lt;/a&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;a href = "https://researchblog.duke.edu/2018/02/06/duke-scholars-bridge-disciplines-to-tackle-big-questions/"&gt;Duke Scholars Bridge Disciplines to Tackle Big Questions&lt;/a&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;a href = "http://talks.schochastics.net/netVizR/slides.html"&gt; Network Vizualization Slide by Schochastics&lt;/a&gt;&lt;/li&gt;
+    
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ul&gt;
+&lt;li&gt;Courses
+    &lt;ul&gt;
+    &lt;li&gt;李宣緯老師 - &lt;a href = "https://sites.google.com/view/hsuanweilee/teaching/social-and-economic-networks"&gt;Social and Economic Networks&lt;/a&gt;&lt;/li&gt;
+    &lt;li&gt;&lt;a href = "https://www.coursera.org/learn/social-economic-networks"&gt;Coursera courses&lt;a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+
+---
+
+class: inverse, center, middle
+
+# Thanks 
+
+&lt;img src="image/chang_major_hub" width="95%" height="95%" style="display: block; margin: auto;" /&gt;
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false,
+"self_contained": true
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
