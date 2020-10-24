@@ -28,6 +28,6 @@ Tidy Network Analysis: Legislative cosponsorship networks in Taiwan
 > * 不適合想聽學術政治分析的人
 
 ### Speaker
-曾子軒 (Dennis Tseng)，台大新聞所在學生，目前在一間科技公司擔任實習分析師，對統計、商業分析、資料分析、資料新聞、資訊視覺化都很有興趣，超級喜歡 R！
+Dennis，台大新聞所在學生，目前在一間科技公司擔任實習分析師，對統計、商業分析、資料分析、資料新聞、資訊視覺化都很有興趣，超級喜歡 R！
 
 
