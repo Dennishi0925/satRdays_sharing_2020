@@ -5,7 +5,7 @@ You can find detailed information of the event on its [official website](https:/
 
 ### Material
 > * Code - igraph.R & tutorial.R (main)
-> * Slide https://dennishi0925.github.io/satRdays_sharing_2020_slide/sharing_slide
+> * Slide https://dennishi0925.github.io/satRdays_sharing_2020/sharing_slide
 
 ### Topic
 Tidy Network Analysis: Legislative cosponsorship networks in Taiwan 
